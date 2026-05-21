@@ -3,7 +3,6 @@ import '../entities/player.dart';
 abstract class IAuthRepository {
   bool get isLoggedIn;
   String? get currentUserId;
-  Stream<bool> get authStateStream;
 
   Future<Player> signUp({
     required String email,

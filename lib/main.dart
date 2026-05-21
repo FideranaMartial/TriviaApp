@@ -12,16 +12,12 @@ import 'features/category/presentation/pages/home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await dotenv.load(fileName: '.env');
-
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
-
   setupInjection();
-
   runApp(const TriviaApp());
 }
 
@@ -30,7 +26,7 @@ class TriviaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
+    return BlocProvider<AuthBloc>(
       create: (_) => sl<AuthBloc>()..add(CheckAuthEvent()),
       child: MaterialApp(
         title: 'Trivia App',
@@ -39,25 +35,21 @@ class TriviaApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home: const _RootNavigator(),
+        home: BlocBuilder<AuthBloc, AuthState>(
+          builder: (context, state) {
+            print('=== ROOT STATE: ${state.runtimeType}');
+            if (state is AuthenticatedState) return const HomeScreen();
+            if (state is UnauthenticatedState) return const LoginScreen();
+            if (state is AuthErrorState) {
+              // Forcer retour au LoginScreen avec l'erreur
+              return const LoginScreen();
+            }
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          },
+        ),
       ),
-    );
-  }
-}
-
-/// Redirige automatiquement selon l'état d'auth.
-class _RootNavigator extends StatelessWidget {
-  const _RootNavigator();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        if (state is AuthenticatedState) return const HomeScreen();
-        if (state is UnauthenticatedState) return const LoginScreen();
-        // AuthInitial ou AuthLoading
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      },
     );
   }
 }

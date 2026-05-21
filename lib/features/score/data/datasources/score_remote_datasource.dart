@@ -26,6 +26,20 @@ class ScoreRemoteDataSource {
             .toList());
   }
 
+  // Méthode séparée pour récupérer le classement avec les pseudos
+  Future<List<Score>> getLeaderboardWithPseudos(int categoryId) async {
+    final data = await _client
+        .from('scores')
+        .select('*, players(pseudo)')  // ← JOIN avec players
+        .eq('category_id', categoryId)
+        .order('points', ascending: false)
+        .limit(20);
+
+    return (data as List)
+        .map((e) => _mapToScoreWithPseudo(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<Score>> getPlayerScores(String playerId) async {
     final data = await _client
         .from('scores')
@@ -41,6 +55,19 @@ class ScoreRemoteDataSource {
   Score _mapToScore(Map<String, dynamic> json) => Score(
         id: json['id'] as int?,
         playerId: json['player_id'] as String,
+        categoryId: json['category_id'] as int,
+        points: json['points'] as int,
+        correctAnswers: json['correct_answers'] as int? ?? 0,
+        playedAt: json['played_at'] != null
+            ? DateTime.parse(json['played_at'] as String)
+            : null,
+      );
+
+  Score _mapToScoreWithPseudo(Map<String, dynamic> json) => Score(
+        id: json['id'] as int?,
+        playerId: json['player_id'] as String,
+        // Récupère le pseudo depuis le JOIN, sinon affiche les 8 premiers chars de l'UID
+        pseudo: (json['players'] as Map<String, dynamic>?)?['pseudo'] as String?,
         categoryId: json['category_id'] as int,
         points: json['points'] as int,
         correctAnswers: json['correct_answers'] as int? ?? 0,

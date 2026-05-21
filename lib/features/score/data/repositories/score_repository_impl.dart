@@ -10,8 +10,8 @@ class ScoreRepositoryImpl implements IScoreRepository {
   Future<void> saveScore(Score score) => _dataSource.saveScore(score);
 
   @override
-  Stream<List<Score>> leaderboardStream(int categoryId) =>
-      _dataSource.leaderboardStream(categoryId);
+  Future<List<Score>> getLeaderboard(int categoryId) =>
+      _dataSource.getLeaderboardWithPseudos(categoryId);
 
   @override
   Future<List<Score>> getPlayerScores(String playerId) =>

@@ -8,19 +8,39 @@ class AuthRemoteDataSource {
   bool get isLoggedIn => _client.auth.currentUser != null;
   String? get currentUserId => _client.auth.currentUser?.id;
 
-  Stream<bool> get authStateStream => _client.auth.onAuthStateChange
-      .map((state) => state.session != null);
-
   Future<Player> signUp({
     required String email,
     required String password,
     required String pseudo,
   }) async {
+    // Vérifier si le pseudo est déjà pris
+    final existingPseudo = await _client
+        .from('players')
+        .select('id')
+        .eq('pseudo', pseudo)
+        .maybeSingle();
+
+    if (existingPseudo != null) {
+      throw Exception('PSEUDO_TAKEN');
+    }
+
+    // Vérifier si l'email est déjà utilisé
+    final emailExists = await _client
+        .rpc('check_email_exists', params: {'user_email': email});
+
+    if (emailExists == true) {
+      throw Exception('EMAIL_ALREADY_EXISTS');
+    }
+
     final response = await _client.auth.signUp(
       email: email,
       password: password,
     );
-    if (response.user == null) throw Exception('Inscription échouée');
+
+    if (response.user == null) {
+      throw Exception('SIGNUP_FAILED');
+    }
+
     return getOrCreatePlayer(pseudo);
   }
 
@@ -28,13 +48,39 @@ class AuthRemoteDataSource {
     required String email,
     required String password,
   }) async {
-    await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
-    final player = await getPlayer();
-    if (player == null) throw Exception('Profil introuvable');
-    return player;
+    // Vérifier d'abord si l'email existe
+    final emailExists = await _client
+        .rpc('check_email_exists', params: {'user_email': email});
+
+    if (emailExists != true) {
+      throw Exception('EMAIL_NOT_FOUND');
+    }
+
+    // L'email existe — tenter la connexion
+    try {
+      final response = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (response.user == null) {
+        throw Exception('WRONG_PASSWORD');
+      }
+
+      final player = await getPlayer();
+      if (player == null) {
+        await _client.auth.signOut();
+        throw Exception('PROFILE_NOT_FOUND');
+      }
+
+      return player;
+    } on AuthException catch (e) {
+      if (e.message.contains('Invalid login credentials') ||
+          e.message.contains('invalid_credentials')) {
+        throw Exception('WRONG_PASSWORD');
+      }
+      throw Exception(e.message);
+    }
   }
 
   Future<Player> getOrCreatePlayer(String pseudo) async {

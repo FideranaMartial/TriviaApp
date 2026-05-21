@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../domain/usecases/check_auth_usecase.dart';
 import '../../domain/usecases/sign_in_usecase.dart';
 import '../../domain/usecases/sign_up_usecase.dart';
 import '../../domain/usecases/sign_out_usecase.dart';
-import '../../domain/repositories/i_auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -14,30 +12,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignInUseCase signIn;
   final SignUpUseCase signUp;
   final SignOutUseCase signOut;
-  final IAuthRepository _authRepository;
 
-  StreamSubscription<bool>? _authSubscription;
-
+  // Plus de stream — tout est contrôlé manuellement
   AuthBloc({
     required this.checkAuth,
     required this.signIn,
     required this.signUp,
     required this.signOut,
-    required IAuthRepository authRepository,
-  })  : _authRepository = authRepository,
-        super(AuthInitial()) {
+  }) : super(AuthInitial()) {
     on<CheckAuthEvent>(_onCheckAuth);
     on<SignInEvent>(_onSignIn);
     on<SignUpEvent>(_onSignUp);
     on<SignOutEvent>(_onSignOut);
-    on<_AuthStateChangedEvent>(_onAuthChanged);
-
-    _authSubscription = _authRepository.authStateStream.listen((isLoggedIn) {
-      add(_AuthStateChangedEvent(isLoggedIn));
-    });
   }
 
-  Future<void> _onCheckAuth(CheckAuthEvent e, Emitter<AuthState> emit) async {
+  Future<void> _onCheckAuth(
+      CheckAuthEvent e, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
       final player = await checkAuth(const NoParams());
@@ -51,54 +41,93 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onSignIn(SignInEvent e, Emitter<AuthState> emit) async {
+  Future<void> _onSignIn(
+      SignInEvent e, Emitter<AuthState> emit) async {
+    // Validation locale avant d'appeler Supabase
+    if (e.email.trim().isEmpty || e.password.isEmpty) {
+      emit(AuthErrorState('Veuillez remplir tous les champs.'));
+      return;
+    }
+    if (!e.email.contains('@')) {
+      emit(AuthErrorState('Adresse email invalide.'));
+      return;
+    }
+
     emit(AuthLoading());
     try {
       final player = await signIn(SignInParams(
-        email: e.email,
+        email: e.email.trim(),
         password: e.password,
       ));
       emit(AuthenticatedState(player));
     } catch (err) {
-      emit(AuthErrorState(err.toString()));
+      print('=== ERREUR SIGNIN: ${err.toString()}');
+      emit(AuthErrorState(_translate(err.toString())));
     }
   }
 
-  Future<void> _onSignUp(SignUpEvent e, Emitter<AuthState> emit) async {
-  emit(AuthLoading());
-  try {
-    print('=== SignUp start: ${e.email}');
-    final player = await signUp(SignUpParams(
-      email: e.email,
-      password: e.password,
-      pseudo: e.pseudo,
-    ));
-    print('=== SignUp success: ${player.pseudo}');
-    emit(AuthenticatedState(player));
-  } catch (err) {
-    print('=== SignUp error: $err');
-    emit(AuthErrorState(err.toString()));
-  }
-}
+  Future<void> _onSignUp(
+      SignUpEvent e, Emitter<AuthState> emit) async {
+    // Validations locales
+    if (e.pseudo.trim().isEmpty ||
+        e.email.trim().isEmpty ||
+        e.password.isEmpty) {
+      emit(AuthErrorState('Veuillez remplir tous les champs.'));
+      return;
+    }
+    if (!e.email.contains('@')) {
+      emit(AuthErrorState('Adresse email invalide.'));
+      return;
+    }
+    if (e.password.length < 6) {
+      emit(AuthErrorState(
+          'Le mot de passe doit contenir au moins 6 caractères.'));
+      return;
+    }
 
-  Future<void> _onSignOut(SignOutEvent e, Emitter<AuthState> emit) async {
-    await signOut(const NoParams());
+    emit(AuthLoading());
+    try {
+      final player = await signUp(SignUpParams(
+        email: e.email.trim(),
+        password: e.password,
+        pseudo: e.pseudo.trim(),
+      ));
+      emit(AuthenticatedState(player));
+    } catch (err) {
+      emit(AuthErrorState(_translate(err.toString())));
+    }
+  }
+
+  Future<void> _onSignOut(
+      SignOutEvent e, Emitter<AuthState> emit) async {
+    try {
+      await signOut(const NoParams());
+    } catch (_) {}
     emit(UnauthenticatedState());
   }
 
-  Future<void> _onAuthChanged(
-      _AuthStateChangedEvent e, Emitter<AuthState> emit) async {
-    if (!e.isLoggedIn) emit(UnauthenticatedState());
+  String _translate(String error) {
+  if (error.contains('EMAIL_NOT_FOUND')) {
+    return 'Aucun compte trouvé avec cet email. Veuillez vous inscrire.';
   }
-
-  @override
-  Future<void> close() {
-    _authSubscription?.cancel();
-    return super.close();
+  if (error.contains('WRONG_PASSWORD')) {
+    return 'Mot de passe incorrect. Veuillez réessayer.';
   }
+  if (error.contains('EMAIL_ALREADY_EXISTS')) {
+    return 'Un compte existe déjà avec cet email. Veuillez vous connecter.';
+  }
+  if (error.contains('PSEUDO_TAKEN')) {
+    return 'Ce pseudo est déjà utilisé. Choisissez-en un autre.';
+  }
+  if (error.contains('SIGNUP_FAILED')) {
+    return 'Inscription échouée. Veuillez réessayer.';
+  }
+  if (error.contains('PROFILE_NOT_FOUND')) {
+    return 'Profil introuvable. Veuillez vous inscrire.';
+  }
+  if (error.contains('Network') || error.contains('SocketException')) {
+    return 'Pas de connexion internet.';
+  }
+  return 'Une erreur est survenue. Veuillez réessayer.';
 }
-
-class _AuthStateChangedEvent extends AuthEvent {
-  final bool isLoggedIn;
-  _AuthStateChangedEvent(this.isLoggedIn);
 }

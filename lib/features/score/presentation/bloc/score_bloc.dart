@@ -15,10 +15,11 @@ class ScoreBloc extends Bloc<ScoreEvent, ScoreState> {
     Emitter<ScoreState> emit,
   ) async {
     emit(ScoreLoading());
-    await emit.forEach<List>(
-      _getLeaderboard(event.categoryId),
-      onData: (scores) => LeaderboardLoadedState(scores.cast()),
-      onError: (e, _) => ScoreErrorState(e.toString()),
-    );
+    try {
+      final scores = await _getLeaderboard(event.categoryId);
+      emit(LeaderboardLoadedState(scores));
+    } catch (e) {
+      emit(ScoreErrorState(e.toString()));
+    }
   }
 }

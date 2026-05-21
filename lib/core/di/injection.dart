@@ -78,7 +78,6 @@ void setupInjection() {
         signIn: sl(),
         signUp: sl(),
         signOut: sl(),
-        authRepository: sl<IAuthRepository>(),
       ));
   sl.registerFactory(() => CategoryCubit(sl()));
   sl.registerFactory(() => GameBloc(

@@ -64,13 +64,17 @@ class _ScoreTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const medals = ['🥇', '🥈', '🥉'];
+    // Affiche le pseudo, sinon les 8 premiers caractères de l'UID
+    final displayName = score.pseudo ??
+        score.playerId.substring(0, 8);
+
     return ListTile(
       leading: Text(
         rank <= 3 ? medals[rank - 1] : '$rank',
         style: const TextStyle(fontSize: 20),
       ),
       title: Text(
-        score.playerId.substring(0, 8),
+        displayName,                    // ← pseudo affiché ici
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Text('${score.correctAnswers} bonnes réponses'),
