@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'leaderboard_screen.dart';
+import '../../../../core/theme/app_theme.dart';
 
-class ScoreScreen extends StatelessWidget {
+class ScoreScreen extends StatefulWidget {
   final int totalScore;
   final int correctAnswers;
   final int totalQuestions;
@@ -16,87 +17,256 @@ class ScoreScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final percent = totalQuestions > 0
-        ? (correctAnswers / totalQuestions * 100).round()
-        : 0;
+  State<ScoreScreen> createState() => _ScoreScreenState();
+}
 
+class _ScoreScreenState extends State<ScoreScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scoreAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _scoreAnimation = Tween<double>(begin: 0, end: widget.totalScore.toDouble()).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(Icons.emoji_events, size: 90, color: Colors.amber),
-              const SizedBox(height: 16),
-              const Text(
-                'Partie terminée !',
-                style:
-                    TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 36),
-              _StatRow(label: 'Score total', value: '$totalScore pts'),
-              const SizedBox(height: 12),
-              _StatRow(
-                  label: 'Bonnes réponses',
-                  value: '$correctAnswers / $totalQuestions'),
-              const SizedBox(height: 12),
-              _StatRow(
-                  label: 'Taux de réussite', value: '$percent %'),
-              const SizedBox(height: 44),
-              FilledButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        LeaderboardScreen(categoryId: categoryId),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(  // ← Ajout de SingleChildScrollView
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
+                  _buildAnimatedConfetti(),
+                  const SizedBox(height: 20),
+                  FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Partie terminée !',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Félicitations ! 🎉',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: const Text('Voir le classement'),
+                  const SizedBox(height: 30),
+                  _buildStatCard(),
+                  const SizedBox(height: 30),
+                  _buildActionButtons(),
+                  const SizedBox(height: 20),
+                ],
               ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () =>
-                    Navigator.popUntil(context, (r) => r.isFirst),
-                child: const Text("Retour à l'accueil"),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _StatRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _StatRow({required this.label, required this.value});
+  Widget _buildAnimatedConfetti() {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 800),
+      builder: (context, double scale, child) {
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppTheme.secondaryGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.deepPurple.withOpacity(0.5),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.emoji_events,
+              size: 70,
+              color: Colors.white,
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStatCard() {
+    final percent = (widget.correctAnswers / widget.totalQuestions * 100).round();
+
+    return AnimatedBuilder(
+      animation: _scoreAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.1),
+                Colors.white.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildStatRow('Score total', '${_scoreAnimation.value.toInt()} pts', Colors.amber),
+              const SizedBox(height: 12),
+              _buildStatRow(
+                'Bonnes réponses',
+                '${widget.correctAnswers} / ${widget.totalQuestions}',
+                Colors.green,
+              ),
+              const SizedBox(height: 12),
+              _buildStatRow('Taux de réussite', '$percent%', Colors.blue),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.07),
+        color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.grey, fontSize: 15)),
-          Text(value,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            label,
+            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: color,
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        TweenAnimationBuilder(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 500),
+          builder: (context, double scale, child) {
+            return Transform.scale(
+              scale: scale,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: AppTheme.secondaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.deepPurple.withOpacity(0.4),
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LeaderboardScreen(categoryId: widget.categoryId),
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Voir le classement',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(
+          onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.white.withOpacity(0.5)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: const Text(
+            "Retour à l'accueil",
+            style: TextStyle(fontSize: 15),
+          ),
+        ),
+      ],
     );
   }
 }
