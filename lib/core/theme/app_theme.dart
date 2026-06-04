@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
+  // --- Violet principal ---
   static const primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      Color(0xFF6B34E8),
-      Color(0xFF9B4DFF),
-      Color(0xFFC76EFF),
+      Color(0xFF4C1D95), // violet très sombre
+      Color(0xFF7C3AED), // violet vif
+      Color(0xFFA855F7), // violet moyen
     ],
   );
 
+  // --- Orange secondaire (remplace le rose/rouge) ---
   static const secondaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      Color(0xFFFF6B6B),
-      Color(0xFFFF8E8E),
-      Color(0xFFFFB4B4),
+      Color(0xFFF97316), // orange vif
+      Color(0xFFFB923C), // orange clair
+      Color(0xFFFED7AA), // orange pâle
     ],
   );
 
@@ -29,28 +31,27 @@ class AppTheme {
     colors: [Color(0xFFD32F2F), Color(0xFFFF5252)],
   );
 
-  static const backgroundColor = Color(0xFF0D0B1A);
-  static const cardColor = Color(0xFF1A1730);
-  static const surfaceColor = Color(0xFF26233D);
+  // --- Fonds sombres à dominante violette ---
+  static const backgroundColor = Color(0xFF0F0A1E);
+  static const cardColor = Color(0xFF1A1040);
+  static const surfaceColor = Color(0xFF241858);
 
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: backgroundColor,
       fontFamily: 'Poppins',
-      primaryColor: Colors.deepPurple,
+      primaryColor: const Color(0xFF7C3AED),
       colorScheme: const ColorScheme.dark(
-        primary: Color(0xFF9B4DFF),
-        secondary: Color(0xFFC76EFF),
+        primary: Color(0xFF7C3AED),
+        secondary: Color(0xFFF97316),
         surface: surfaceColor,
         background: backgroundColor,
       ),
       cardTheme: CardThemeData(
         color: cardColor,
         elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -65,7 +66,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF9B4DFF), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFF97316), width: 2),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

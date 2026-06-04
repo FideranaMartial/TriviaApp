@@ -48,7 +48,7 @@ class _GameView extends StatelessWidget {
                 totalScore: state.totalScore,
                 correctAnswers: state.correctAnswers,
                 totalQuestions: state.totalQuestions,
-                categoryId: state.categoryId,
+                categoryId: state.categoryId, pseudo: '',
               ),
             ),
           );

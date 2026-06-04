@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
-import '../../../../core/theme/app_theme.dart'; 
+import '../../../../core/theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,8 +43,13 @@ class _LoginScreenState extends State<LoginScreen>
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _animationController.forward();
   }
@@ -73,10 +78,9 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    context.read<AuthBloc>().add(SignInEvent(
-          email: _emailCtrl.text.trim(),
-          password: _passwordCtrl.text,
-        ));
+    context.read<AuthBloc>().add(
+      SignInEvent(email: _emailCtrl.text.trim(), password: _passwordCtrl.text),
+    );
   }
 
   void _signUp(BuildContext context) {
@@ -97,11 +101,13 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    context.read<AuthBloc>().add(SignUpEvent(
-          email: _emailSignUpCtrl.text.trim(),
-          password: _passwordSignUpCtrl.text,
-          pseudo: _pseudoCtrl.text.trim(),
-        ));
+    context.read<AuthBloc>().add(
+      SignUpEvent(
+        email: _emailSignUpCtrl.text.trim(),
+        password: _passwordSignUpCtrl.text,
+        pseudo: _pseudoCtrl.text.trim(),
+      ),
+    );
   }
 
   @override
@@ -120,9 +126,7 @@ class _LoginScreenState extends State<LoginScreen>
 
           return Scaffold(
             body: Container(
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-              ),
+              decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
               child: SafeArea(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
@@ -168,7 +172,9 @@ class _LoginScreenState extends State<LoginScreen>
               gradient: AppTheme.secondaryGradient,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.4),
+                  color: Color(
+                    0xFF7C3AED,
+                  ).withOpacity(0.4), // violet au lieu de deepPurple
                   blurRadius: 30,
                   spreadRadius: 5,
                 ),
@@ -197,10 +203,7 @@ class _LoginScreenState extends State<LoginScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -216,13 +219,16 @@ class _LoginScreenState extends State<LoginScreen>
             TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                gradient: AppTheme.secondaryGradient,
+                gradient: AppTheme.secondaryGradient, // orange
                 borderRadius: BorderRadius.circular(30),
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white70,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
               tabs: const [
                 Tab(text: 'Connexion'),
                 Tab(text: 'Inscription'),
@@ -261,10 +267,7 @@ class _LoginScreenState extends State<LoginScreen>
         gradient: AppTheme.errorGradient,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 10),
         ],
       ),
       child: Row(
@@ -400,11 +403,11 @@ class _LoginScreenState extends State<LoginScreen>
           scale: scale,
           child: Container(
             decoration: BoxDecoration(
-              gradient: AppTheme.secondaryGradient,
+              gradient: AppTheme.secondaryGradient, // orange
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.4),
+                  color: Color(0xFFF97316).withOpacity(0.4),
                   blurRadius: 15,
                 ),
               ],
