@@ -7,7 +7,8 @@ class ScoreRepositoryImpl implements IScoreRepository {
   const ScoreRepositoryImpl(this._dataSource);
 
   @override
-  Future<void> saveScore(Score score) => _dataSource.saveScore(score);
+Future<Score> saveScore(Score score) =>
+    _dataSource.saveScore(score);
 
   @override
   Future<List<Score>> getLeaderboard(int categoryId) =>

@@ -1,13 +1,14 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../category/domain/entities/category.dart';
 import '../../../score/presentation/pages/score_screen.dart';
 import '../../domain/entities/option.dart';
 import '../bloc/game_bloc.dart';
 import '../bloc/game_event.dart';
 import '../bloc/game_state.dart';
-import '../../../../core/theme/app_theme.dart';
 
 class GameScreen extends StatelessWidget {
   final Category category;
@@ -23,10 +24,9 @@ class GameScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => sl<GameBloc>()
-        ..add(LoadQuestionsEvent(
-          categoryId: category.id,
-          difficulty: difficulty,
-        )),
+        ..add(
+          LoadQuestionsEvent(categoryId: category.id, difficulty: difficulty),
+        ),
       child: _GameView(category: category),
     );
   }
@@ -48,7 +48,8 @@ class _GameView extends StatelessWidget {
                 totalScore: state.totalScore,
                 correctAnswers: state.correctAnswers,
                 totalQuestions: state.totalQuestions,
-                categoryId: state.categoryId, pseudo: '',
+                categoryId: state.categoryId,
+                scoreId: state.scoreId,
               ),
             ),
           );
@@ -57,487 +58,468 @@ class _GameView extends StatelessWidget {
       builder: (context, state) {
         if (state is GameLoading) {
           return const Scaffold(
-            body: Center(child: _AnimatedGameLoader()),
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.orange),
+            ),
           );
         }
         if (state is GameErrorState) {
           return Scaffold(
-            body: Center(child: Text(state.message)),
+            body: Center(
+              child: Text(
+                state.message,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
           );
         }
         if (state is QuestionLoadedState) {
           return _QuestionView(state: state, category: category);
         }
         if (state is AnswerResultState) {
-          return _AnimatedAnswerResultView(state: state, category: category);
+          return _AnswerResultView(state: state, category: category);
         }
         return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          body: Center(
+            child: CircularProgressIndicator(color: AppColors.orange),
+          ),
         );
       },
     );
   }
 }
 
-class _AnimatedGameLoader extends StatelessWidget {
-  const _AnimatedGameLoader();
+// ── Timer circulaire ──────────────────────────────────────────
+class _CircularTimer extends StatelessWidget {
+  final int seconds;
+  final int maxSeconds;
+  const _CircularTimer({required this.seconds, required this.maxSeconds});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        TweenAnimationBuilder(
-          tween: Tween<double>(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 800),
-          builder: (context, double value, child) {
-            return Transform.scale(
-              scale: value,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.secondaryGradient,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.deepPurple.withOpacity(0.4),
-                      blurRadius: 20,
-                    ),
-                  ],
-                ),
-                child: const SizedBox(
-                  height: 50,
-                  width: 50,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-        const Text(
-          'Chargement des questions...',
-          style: TextStyle(color: Colors.white70, fontSize: 16),
-        ),
-      ],
+    final progress = seconds / maxSeconds;
+    final color = seconds <= 5
+        ? AppColors.wrong
+        : seconds <= 10
+        ? Colors.amber
+        : AppColors.orange;
+
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(72, 72),
+            painter: _TimerPainter(progress: progress, color: color),
+          ),
+          Text(
+            '$seconds',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _QuestionView extends StatefulWidget {
+class _TimerPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  _TimerPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 4;
+    final strokeWidth = 5.0;
+
+    // Fond
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = AppColors.cardBorder
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
+
+    // Arc progress
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -pi / 2,
+      2 * pi * progress,
+      false,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TimerPainter old) =>
+      old.progress != progress || old.color != color;
+}
+
+// ── Vue Question ──────────────────────────────────────────────
+class _QuestionView extends StatelessWidget {
   final QuestionLoadedState state;
   final Category category;
-
   const _QuestionView({required this.state, required this.category});
 
   @override
-  State<_QuestionView> createState() => _QuestionViewState();
-}
-
-class _QuestionViewState extends State<_QuestionView> with TickerProviderStateMixin {
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
-    _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  Color get _color => Color(int.parse(widget.category.colorHex.replaceFirst('#', '0xFF')));
-
-  @override
   Widget build(BuildContext context) {
-    final timerRatio = widget.state.timerSeconds / widget.state.question.timeLimit;
-    final timerColor = widget.state.timerSeconds <= 5 ? Colors.red : _color;
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(widget.category.name),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: AppTheme.primaryGradient,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2D1B69), Color(0xFF1A1A2E)],
+          ),
         ),
         child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildProgressBar(_color),
-                  const SizedBox(height: 20),
-                  _buildScoreAndTimer(timerColor),
-                  const SizedBox(height: 8),
-                  _buildTimerBar(timerColor, timerRatio),
-                  const SizedBox(height: 20),
-                  _buildQuestionCard(_color),
-                  const SizedBox(height: 20),
-                  ...widget.state.question.options.map(
-                    (opt) => _AnimatedOptionButton(
-                      option: opt,
-                      color: _color,
-                      index: widget.state.question.options.indexOf(opt),
-                      onTap: () => context.read<GameBloc>().add(AnswerSubmittedEvent(opt)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              children: [
+                // Header : score | progress | timer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Score
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.person_outline,
+                            color: AppColors.textSecondary,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${state.questionIndex + 1} of ${state.totalQuestions}',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+
+                    // Timer circulaire
+                    _CircularTimer(
+                      seconds: state.timerSeconds,
+                      maxSeconds: state.question.timeLimit,
+                    ),
+
+                    // Points
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.emoji_events,
+                            color: AppColors.orange,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${state.score} pts',
+                            style: const TextStyle(
+                              color: AppColors.orange,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: (state.questionIndex + 1) / state.totalQuestions,
+                    backgroundColor: AppColors.surface,
+                    valueColor: const AlwaysStoppedAnimation(AppColors.orange),
+                    minHeight: 6,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 24),
+
+                // Carte question
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.cardBorder, width: 1),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Question ${(state.questionIndex + 1).toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.orange,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        category.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(color: AppColors.cardBorder),
+                      ),
+                      Text(
+                        '"${state.question.text}"',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Options
+                Expanded(
+                  child: ListView(
+                    children: state.question.options
+                        .map(
+                          (opt) => _OptionTile(
+                            option: opt,
+                            onTap: () => context.read<GameBloc>().add(
+                              AnswerSubmittedEvent(opt),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildProgressBar(Color color) {
-    return Column(
-      children: [
-        Text(
-          'Question ${widget.state.questionIndex + 1} / ${widget.state.totalQuestions}',
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
-        ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: (widget.state.questionIndex + 1) / widget.state.totalQuestions,
-          color: color,
-          backgroundColor: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ],
-    );
-  }
+class _OptionTile extends StatelessWidget {
+  final Option option;
+  final VoidCallback onTap;
+  const _OptionTile({required this.option, required this.onTap});
 
-  Widget _buildScoreAndTimer(Color timerColor) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.star, color: Colors.amber, size: 18),
-              const SizedBox(width: 4),
-              Text(
-                '${widget.state.score}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: timerColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: timerColor, width: 1),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.timer, color: timerColor, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                '${widget.state.timerSeconds}s',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: timerColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimerBar(Color timerColor, double timerRatio) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: 1, end: timerRatio),
-      duration: const Duration(milliseconds: 300),
-      builder: (context, double value, child) {
-        return LinearProgressIndicator(
-          value: value,
-          color: timerColor,
-          backgroundColor: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(4),
-        );
-      },
-    );
-  }
-
-  Widget _buildQuestionCard(Color color) {
-    return Expanded(
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withOpacity(0.1),
-              Colors.white.withOpacity(0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: color.withOpacity(0.3), width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.2),
-              blurRadius: 20,
-              spreadRadius: 2,
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder, width: 1),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                option.text,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.cardBorder, width: 1.5),
+              ),
             ),
           ],
         ),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Text(
-            widget.state.question.text,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-              height: 1.4,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
       ),
     );
   }
 }
 
-class _AnimatedOptionButton extends StatefulWidget {
-  final Option option;
-  final Color color;
-  final int index;
-  final VoidCallback onTap;
-
-  const _AnimatedOptionButton({
-    required this.option,
-    required this.color,
-    required this.index,
-    required this.onTap,
-  });
-
-  @override
-  State<_AnimatedOptionButton> createState() => _AnimatedOptionButtonState();
-}
-
-class _AnimatedOptionButtonState extends State<_AnimatedOptionButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 300 + (widget.index * 50)),
-    );
-    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(_animation),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: OutlinedButton(
-            onPressed: widget.onTap,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              side: BorderSide(color: widget.color.withOpacity(0.5), width: 2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              backgroundColor: widget.color.withOpacity(0.1),
-            ),
-            child: Text(
-              widget.option.text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, color: Colors.white),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedAnswerResultView extends StatefulWidget {
+// ── Vue Résultat Réponse ──────────────────────────────────────
+class _AnswerResultView extends StatelessWidget {
   final AnswerResultState state;
   final Category category;
-
-  const _AnimatedAnswerResultView({required this.state, required this.category});
-
-  @override
-  State<_AnimatedAnswerResultView> createState() => _AnimatedAnswerResultViewState();
-}
-
-class _AnimatedAnswerResultViewState extends State<_AnimatedAnswerResultView>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _scaleAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  const _AnswerResultView({required this.state, required this.category});
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(int.parse(widget.category.colorHex.replaceFirst('#', '0xFF')));
-
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: AppTheme.primaryGradient,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF2D1B69), Color(0xFF1A1A2E)],
+          ),
         ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ScaleTransition(
-                  scale: _scaleAnimation,
-                  child: Icon(
-                    widget.state.isCorrect ? Icons.check_circle : Icons.cancel,
-                    size: 100,
-                    color: widget.state.isCorrect ? Colors.green : Colors.red,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FadeTransition(
-                  opacity: _fadeAnimation,
+                // Options avec couleurs résultat
+                Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        widget.state.isCorrect
-                            ? 'Bonne réponse ! ✨'
-                            : 'Mauvaise réponse 😔',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: widget.state.isCorrect ? Colors.green : Colors.red,
+                      // Icône résultat
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: state.isCorrect
+                              ? AppColors.correct.withOpacity(0.15)
+                              : AppColors.wrong.withOpacity(0.15),
                         ),
-                        textAlign: TextAlign.center,
+                        child: Icon(
+                          state.isCorrect ? Icons.check_circle : Icons.cancel,
+                          size: 60,
+                          color: state.isCorrect
+                              ? AppColors.correct
+                              : AppColors.wrong,
+                        ),
                       ),
-                      if (widget.state.isCorrect) ...[
-                        const SizedBox(height: 8),
-                        const Text(
-                          '+10 points',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.amber,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      const SizedBox(height: 16),
+                      Text(
+                        state.isCorrect
+                            ? 'Bonne réponse ! +10 pts'
+                            : 'Mauvaise réponse',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: state.isCorrect
+                              ? AppColors.correct
+                              : AppColors.wrong,
                         ),
-                      ] else ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Toutes les options avec couleurs
+                      ...state.question.options.map((opt) {
+                        Color borderColor = AppColors.cardBorder;
+                        Color bgColor = AppColors.surface;
+                        Color textColor = AppColors.textPrimary;
+                        Widget? trailing;
+
+                        if (opt.isCorrect) {
+                          borderColor = AppColors.correct;
+                          bgColor = AppColors.correct.withOpacity(0.1);
+                          textColor = AppColors.correct;
+                          trailing = const Icon(
+                            Icons.check_circle,
+                            color: AppColors.correct,
+                            size: 24,
+                          );
+                        } else if (opt.id == state.selectedOption.id) {
+                          borderColor = AppColors.wrong;
+                          bgColor = AppColors.wrong.withOpacity(0.1);
+                          textColor = AppColors.wrong;
+                          trailing = const Icon(
+                            Icons.cancel,
+                            color: AppColors.wrong,
+                            size: 24,
+                          );
+                        }
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
                           ),
-                          child: Column(
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderColor, width: 1.5),
+                          ),
+                          child: Row(
                             children: [
-                              const Text(
-                                'La bonne réponse était :',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                widget.state.question.correctOption?.text ?? '',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
+                              Expanded(
+                                child: Text(
+                                  opt.text,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: textColor,
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
                               ),
+                              if (trailing != null) trailing,
                             ],
                           ),
-                        ),
-                      ],
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Score actuel : ${widget.state.score} pts',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      _buildNextButton(color),
+                        );
+                      }),
                     ],
+                  ),
+                ),
+
+                // Bouton suivant
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        context.read<GameBloc>().add(NextQuestionEvent()),
+                    child: Text(
+                      state.questionIndex < state.totalQuestions - 1
+                          ? 'Question suivante'
+                          : 'Voir mon score',
+                    ),
                   ),
                 ),
               ],
@@ -545,47 +527,6 @@ class _AnimatedAnswerResultViewState extends State<_AnimatedAnswerResultView>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildNextButton(Color color) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 500),
-      builder: (context, double scale, child) {
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: AppTheme.secondaryGradient,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.4),
-                  blurRadius: 15,
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: () => context.read<GameBloc>().add(NextQuestionEvent()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                widget.state.questionIndex < widget.state.totalQuestions - 1
-                    ? 'Question suivante →'
-                    : 'Voir mon score 🏆',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

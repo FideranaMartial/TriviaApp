@@ -5,14 +5,21 @@ class ScoreRemoteDataSource {
   final SupabaseClient _client;
   const ScoreRemoteDataSource(this._client);
 
-  Future<void> saveScore(Score score) async {
-    await _client.from('scores').insert({
-      'player_id': score.playerId,
-      'category_id': score.categoryId,
-      'points': score.points,
-      'correct_answers': score.correctAnswers,
-    });
-  }
+  Future<Score> saveScore(Score score) async {
+  final data = await _client
+      .from('scores')
+      .insert({
+        'player_id': score.playerId,
+        'category_id': score.categoryId,
+        'points': score.points,
+        'correct_answers': score.correctAnswers,
+      })
+      .select()
+      .single(); // ← récupère la ligne insérée avec son id
+
+  // ignore: unnecessary_cast
+  return _mapToScore(data as Map<String, dynamic>);
+}
 
   Stream<List<Score>> leaderboardStream(int categoryId) {
     return _client

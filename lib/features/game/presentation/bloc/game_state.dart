@@ -56,12 +56,14 @@ class GameOverState extends GameState {
   final int correctAnswers;
   final int totalQuestions;
   final int categoryId;
+  final int? scoreId;
 
    GameOverState({
     required this.totalScore,
     required this.correctAnswers,
     required this.totalQuestions,
     required this.categoryId,
+    this.scoreId, 
   });
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../bloc/score_bloc.dart';
@@ -9,95 +10,107 @@ import '../../domain/entities/score.dart';
 
 class LeaderboardScreen extends StatelessWidget {
   final int categoryId;
-  const LeaderboardScreen({super.key, required this.categoryId});
+  final int? currentScoreId;
+  const LeaderboardScreen({
+    super.key,
+    required this.categoryId,
+    this.currentScoreId,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Récupérer l'uid du joueur connecté
+    final currentUid = Supabase.instance.client.auth.currentUser?.id ?? '';
+
     return BlocProvider(
       create: (_) => sl<ScoreBloc>()..add(LoadLeaderboardEvent(categoryId)),
       child: Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text(
-            'Classement',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
         body: Container(
           decoration: const BoxDecoration(
-            gradient: AppTheme.primaryGradient,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF2D1B69), Color(0xFF1A1A2E)],
+            ),
           ),
           child: SafeArea(
-            child: BlocBuilder<ScoreBloc, ScoreState>(
-              builder: (context, state) {
-                if (state is ScoreLoading || state is ScoreInitial) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFFF97316),
-                    ),
-                  );
-                }
-                if (state is ScoreErrorState) {
-                  return Center(
-                    child: Text(
-                      state.message,
-                      style: const TextStyle(color: Colors.white70, fontSize: 16),
-                    ),
-                  );
-                }
-                if (state is LeaderboardLoadedState) {
-                  return _LeaderboardList(scores: state.scores);
-                }
-                return const SizedBox.shrink();
-              },
+            child: Column(
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios,
+                          color: AppColors.textPrimary,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Text(
+                        'Classement',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Liste
+                Expanded(
+                  child: BlocBuilder<ScoreBloc, ScoreState>(
+                    builder: (context, state) {
+                      if (state is ScoreLoading || state is ScoreInitial) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.orange,
+                          ),
+                        );
+                      }
+                      if (state is ScoreErrorState) {
+                        return Center(
+                          child: Text(
+                            state.message,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        );
+                      }
+                      if (state is LeaderboardLoadedState) {
+                        if (state.scores.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              'Aucun score pour cette catégorie.',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          );
+                        }
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: state.scores.length,
+                          itemBuilder: (_, i) => _ScoreTile(
+                            rank: i + 1,
+                            score: state.scores[i],
+                            isCurrentUser:
+                                state.scores[i].playerId == currentUid,
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LeaderboardList extends StatelessWidget {
-  final List<Score> scores;
-  const _LeaderboardList({required this.scores});
-
-  @override
-  Widget build(BuildContext context) {
-    if (scores.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.leaderboard_rounded,
-                size: 50,
-                color: Colors.white38,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Aucun score pour cette catégorie.',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: scores.length,
-      itemBuilder: (_, i) => _ScoreTile(rank: i + 1, score: scores[i]),
     );
   }
 }
@@ -105,120 +118,162 @@ class _LeaderboardList extends StatelessWidget {
 class _ScoreTile extends StatelessWidget {
   final int rank;
   final Score score;
-  const _ScoreTile({required this.rank, required this.score});
+  final bool isCurrentUser; // ← indique si c'est le joueur connecté
 
-  // Couleur de l'avatar selon le rang
-  Color get _rankColor {
-    if (rank == 1) return const Color(0xFFF97316); // orange doré
-    if (rank == 2) return const Color(0xFFA855F7); // violet moyen
-    if (rank == 3) return const Color(0xFF7C3AED); // violet foncé
-    return const Color(0xFF241858);                // surface sombre
-  }
+  const _ScoreTile({
+    required this.rank,
+    required this.score,
+    required this.isCurrentUser,
+  });
 
   @override
   Widget build(BuildContext context) {
     const medals = ['🥇', '🥈', '🥉'];
+    final isTop3 = rank <= 3;
+    final displayName = score.pseudo ?? score.playerId.substring(0, 8);
 
-    // ── Fix pseudo ────────────────────────────────────────────────────────────
-    // Affiche le pseudo s'il est présent et non vide.
-    // Sinon affiche "Joueur #XXXX" avec les 4 derniers caractères de l'UID,
-    // beaucoup plus lisible qu'un UUID brut.
-    final rawId = score.playerId;
-    final shortId = rawId.length >= 4
-        ? rawId.substring(rawId.length - 4).toUpperCase()
-        : rawId.toUpperCase();
-    final displayName =
-        (score.pseudo != null && score.pseudo!.trim().isNotEmpty)
-            ? score.pseudo!.trim()
-            : 'Joueur #$shortId';
-    // ─────────────────────────────────────────────────────────────────────────
+    // Couleurs selon si c'est le joueur connecté ou non
+    final bgColor = isCurrentUser
+        ? AppColors.orange.withOpacity(0.15)
+        : isTop3
+        ? AppColors.primary.withOpacity(0.15)
+        : AppColors.surface;
 
-    final initials = displayName.length >= 2
-        ? displayName.substring(0, 2).toUpperCase()
-        : displayName.toUpperCase();
+    final borderColor = isCurrentUser
+        ? AppColors.orange.withOpacity(0.7)
+        : isTop3
+        ? AppColors.primary.withOpacity(0.4)
+        : AppColors.cardBorder;
+
+    final avatarBg = isCurrentUser
+        ? AppColors.orange.withOpacity(0.25)
+        : AppColors.primary.withOpacity(0.2);
+
+    final avatarTextColor = isCurrentUser
+        ? AppColors.orange
+        : AppColors.primaryLight;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: rank <= 3
-            ? _rankColor.withOpacity(0.12)
-            : Colors.white.withOpacity(0.05),
+        color: bgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: rank <= 3
-              ? _rankColor.withOpacity(0.4)
-              : Colors.white.withOpacity(0.08),
-          width: 1.5,
-        ),
+        border: Border.all(color: borderColor, width: isCurrentUser ? 2 : 1),
+        boxShadow: isCurrentUser
+            ? [
+                BoxShadow(
+                  color: AppColors.orange.withOpacity(0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Médaille ou numéro
-            SizedBox(
-              width: 28,
+      child: Row(
+        children: [
+          // Rang
+          SizedBox(
+            width: 36,
+            child: Text(
+              isTop3 ? medals[rank - 1] : '$rank',
+              style: TextStyle(
+                fontSize: isTop3 ? 22 : 15,
+                fontWeight: FontWeight.bold,
+                color: isCurrentUser
+                    ? AppColors.orange
+                    : AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Avatar avec initiale
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: avatarBg,
+              border: isCurrentUser
+                  ? Border.all(color: AppColors.orange, width: 2)
+                  : null,
+            ),
+            child: Center(
               child: Text(
-                rank <= 3 ? medals[rank - 1] : '$rank',
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
                 style: TextStyle(
-                  fontSize: rank <= 3 ? 20 : 13,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white54,
+                  color: avatarTextColor,
                 ),
-                textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(width: 8),
-            // Avatar initiales
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: _rankColor.withOpacity(0.25),
-              child: Text(
-                initials,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: rank <= 3 ? _rankColor : Colors.white60,
+          ),
+          const SizedBox(width: 12),
+
+          // Pseudo + réponses
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      displayName,
+                      style: TextStyle(
+                        color: isCurrentUser
+                            ? AppColors.orange
+                            : AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (isCurrentUser) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text(
+                          'Vous',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-            ),
-          ],
-        ),
-        title: Text(
-          displayName,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-            color: Colors.white,
-          ),
-        ),
-        subtitle: Text(
-          '${score.correctAnswers} bonne${score.correctAnswers > 1 ? 's' : ''} '
-          'réponse${score.correctAnswers > 1 ? 's' : ''}',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.45),
-            fontSize: 12,
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF97316).withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: const Color(0xFFF97316).withOpacity(0.4),
+                Text(
+                  '${score.correctAnswers} bonnes réponses',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          child: Text(
+
+          // Points
+          Text(
             '${score.points} pts',
-            style: const TextStyle(
+            style: TextStyle(
+              color: isCurrentUser ? AppColors.orange : AppColors.orange,
               fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Color(0xFFFB923C),
+              fontSize: 16,
             ),
           ),
-        ),
+        ],
       ),
     );
   }

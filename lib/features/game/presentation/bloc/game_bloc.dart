@@ -18,10 +18,8 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   int _correctAnswers = 0;
   Timer? _timer;
 
-  GameBloc({
-    required this.getQuestions,
-    required this.saveScore,
-  }) : super(GameInitial()) {
+  GameBloc({required this.getQuestions, required this.saveScore})
+    : super(GameInitial()) {
     on<LoadQuestionsEvent>(_onLoad);
     on<AnswerSubmittedEvent>(_onAnswer);
     on<NextQuestionEvent>(_onNext);
@@ -53,17 +51,22 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   ) async {
     emit(GameLoading());
     try {
-      _questions = await getQuestions(GetQuestionsParams(
-        categoryId: event.categoryId,
-        difficulty: event.difficulty,
-      ));
+      _questions = await getQuestions(
+        GetQuestionsParams(
+          categoryId: event.categoryId,
+          difficulty: event.difficulty,
+        ),
+      );
       _currentIndex = 0;
       _score = 0;
       _correctAnswers = 0;
 
       if (_questions.isEmpty) {
-        emit( GameErrorState(
-            'Aucune question disponible pour cette catégorie et cette difficulté.'));
+        emit(
+          GameErrorState(
+            'Aucune question disponible pour cette catégorie et cette difficulté.',
+          ),
+        );
         return;
       }
 
@@ -76,13 +79,15 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   void _onTick(TimerTickEvent event, Emitter<GameState> emit) {
     final current = state;
     if (current is QuestionLoadedState) {
-      emit(QuestionLoadedState(
-        question: current.question,
-        questionIndex: current.questionIndex,
-        totalQuestions: current.totalQuestions,
-        score: current.score,
-        timerSeconds: event.remaining,
-      ));
+      emit(
+        QuestionLoadedState(
+          question: current.question,
+          questionIndex: current.questionIndex,
+          totalQuestions: current.totalQuestions,
+          score: current.score,
+          timerSeconds: event.remaining,
+        ),
+      );
     }
   }
 
@@ -99,10 +104,7 @@ class GameBloc extends Bloc<GameEvent, GameState> {
     }
   }
 
-  void _onAnswer(
-    AnswerSubmittedEvent event,
-    Emitter<GameState> emit,
-  ) {
+  void _onAnswer(AnswerSubmittedEvent event, Emitter<GameState> emit) {
     _timer?.cancel();
     final current = state;
     if (current is! QuestionLoadedState) return;
@@ -113,20 +115,19 @@ class GameBloc extends Bloc<GameEvent, GameState> {
       _correctAnswers++;
     }
 
-    emit(AnswerResultState(
-      question: current.question,
-      selectedOption: event.selectedOption,
-      isCorrect: isCorrect,
-      score: _score,
-      questionIndex: _currentIndex,
-      totalQuestions: _questions.length,
-    ));
+    emit(
+      AnswerResultState(
+        question: current.question,
+        selectedOption: event.selectedOption,
+        isCorrect: isCorrect,
+        score: _score,
+        questionIndex: _currentIndex,
+        totalQuestions: _questions.length,
+      ),
+    );
   }
 
-  Future<void> _onNext(
-    NextQuestionEvent event,
-    Emitter<GameState> emit,
-  ) async {
+  Future<void> _onNext(NextQuestionEvent event, Emitter<GameState> emit) async {
     if (_isLastQuestion) {
       await _finish(emit);
     } else {
@@ -142,33 +143,44 @@ class GameBloc extends Bloc<GameEvent, GameState> {
   void _emitCurrentQuestion(Emitter<GameState> emit) {
     final q = _questions[_currentIndex];
     _startTimer(q.timeLimit);
-    emit(QuestionLoadedState(
-      question: q,
-      questionIndex: _currentIndex,
-      totalQuestions: _questions.length,
-      score: _score,
-      timerSeconds: q.timeLimit,
-    ));
+    emit(
+      QuestionLoadedState(
+        question: q,
+        questionIndex: _currentIndex,
+        totalQuestions: _questions.length,
+        score: _score,
+        timerSeconds: q.timeLimit,
+      ),
+    );
   }
 
   Future<void> _finish(Emitter<GameState> emit) async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
+    int? savedScoreId;
+
     if (uid != null && _questions.isNotEmpty) {
       try {
-        await saveScore(Score(
-          playerId: uid,
-          categoryId: _questions.first.categoryId,
-          points: _score,
-          correctAnswers: _correctAnswers,
-        ));
+        final savedScore = await saveScore(
+          Score(
+            playerId: uid,
+            categoryId: _questions.first.categoryId,
+            points: _score,
+            correctAnswers: _correctAnswers,
+          ),
+        );
+        savedScoreId = savedScore.id; // ← récupère l'id
       } catch (_) {}
     }
-    emit(GameOverState(
-      totalScore: _score,
-      correctAnswers: _correctAnswers,
-      totalQuestions: _questions.length,
-      categoryId: _questions.isNotEmpty ? _questions.first.categoryId : 0,
-    ));
+
+    emit(
+      GameOverState(
+        totalScore: _score,
+        correctAnswers: _correctAnswers,
+        totalQuestions: _questions.length,
+        categoryId: _questions.isNotEmpty ? _questions.first.categoryId : 0,
+        scoreId: savedScoreId, // ← passe l'id
+      ),
+    );
   }
 
   @override

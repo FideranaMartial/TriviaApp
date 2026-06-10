@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import 'core/di/injection.dart';
+import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -18,6 +20,10 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   setupInjection();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
   runApp(const TriviaApp());
 }
 
@@ -31,19 +37,12 @@ class TriviaApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Trivia App',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.darkTheme,
         home: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
-            print('=== ROOT STATE: ${state.runtimeType}');
             if (state is AuthenticatedState) return const HomeScreen();
             if (state is UnauthenticatedState) return const LoginScreen();
-            if (state is AuthErrorState) {
-              // Forcer retour au LoginScreen avec l'erreur
-              return const LoginScreen();
-            }
+            if (state is AuthErrorState) return const LoginScreen();
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
