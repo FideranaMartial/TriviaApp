@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../bloc/score_bloc.dart';
@@ -19,8 +18,6 @@ class LeaderboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Récupérer l'uid du joueur connecté
-    final currentUid = Supabase.instance.client.auth.currentUser?.id ?? '';
 
     return BlocProvider(
       create: (_) => sl<ScoreBloc>()..add(LoadLeaderboardEvent(categoryId)),
@@ -98,7 +95,8 @@ class LeaderboardScreen extends StatelessWidget {
                             rank: i + 1,
                             score: state.scores[i],
                             isCurrentUser:
-                                state.scores[i].playerId == currentUid,
+                                currentScoreId != null &&
+                                state.scores[i].id == currentScoreId,
                           ),
                         );
                       }
